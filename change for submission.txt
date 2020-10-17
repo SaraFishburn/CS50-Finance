@@ -1,0 +1,4 @@
+remove decouple import statements in app and helpers
+change if statement under # Make sure API key is set in app and helper
+re-name app.py to application.py
+set api key as per cs50 instructions
