@@ -26,4 +26,6 @@ when a user sells:
 
     create new row in history table
 
+make maximum number input the amount of shares the customer has of that stock
+
 

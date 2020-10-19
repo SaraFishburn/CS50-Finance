@@ -73,50 +73,18 @@ def buy():
         if not stock:
             return apology("invalid symbol", 403)
 
-        name = stock.get('name')
-        price = stock.get('price')
-        symbol = stock.get('symbol')
         user_id = session.get('user_id')
         user_balance = db.execute("SELECT cash FROM users WHERE id = :user_id",
                                     user_id=user_id)[0].get('cash')
+        price = stock.get('price')
         cost = price*shares
         
         # Ensure user has sufficient funds
         if user_balance < cost:
             return apology("insufficient funds", 403)
-
-        # Update db to reflect purchase
+        
         else:
-            updated_balance = user_balance - cost
-            db.execute("UPDATE users SET cash = :updated_balance WHERE id = :user_id",
-                            updated_balance=updated_balance,
-                            user_id=user_id)
-            
-            stock_exists = db.execute("SELECT * FROM stocks WHERE user_id = :user_id AND symbol = :symbol",
-                            user_id=user_id,
-                            symbol=symbol)
-
-            if len(stock_exists) != 0:
-                updated_shares = stock_exists[0].get('shares') + shares
-                stock_id = stock_exists[0].get('id')
-
-                db.execute("UPDATE stocks SET shares = :updated_shares WHERE  id = :stock_id",
-                            updated_shares=updated_shares,
-                            stock_id=stock_id) 
-            else:
-                db.execute("INSERT INTO stocks (user_id, symbol, name, shares) VALUES (:user_id, :symbol, :name, :shares)",
-                            user_id=user_id,
-                            symbol=symbol,
-                            name=name,
-                            shares=shares)
-            
-            db.execute("INSERT INTO history (user_id, symbol, shares, price) VALUES (:user_id, :symbol, :shares, :price)",
-                        user_id=user_id,
-                        symbol=symbol,
-                        shares=shares,
-                        price=price)
-
-            return redirect("/")
+            return buy_sell(stock, shares, user_id, user_balance)
 
     # User reached route via GET (as by clicking a link or via redirect)
     else:
@@ -243,3 +211,56 @@ def errorhandler(e):
 # Listen for errors
 for code in default_exceptions:
     app.errorhandler(code)(errorhandler)
+
+
+# Function to update db to reflect sale/purchase of stock
+def buy_sell(stock, shares, user_id, user_balance):
+    name = stock.get('name')
+    price = stock.get('price')
+    symbol = stock.get('symbol')
+    cost = price*shares
+
+    # Update user's cash balance
+    updated_balance = user_balance - cost
+    db.execute("UPDATE users SET cash = :updated_balance WHERE id = :user_id",
+                    updated_balance=updated_balance,
+                    user_id=user_id)
+    
+    # Attempt to retrieve existing stock under user's id
+    stock_exists = db.execute("SELECT * FROM stocks WHERE user_id = :user_id AND symbol = :symbol",
+                    user_id=user_id,
+                    symbol=symbol)
+
+    # If stock exsists, update the number of shares
+    if len(stock_exists) != 0:
+        updated_shares = stock_exists[0].get('shares') + shares
+        stock_id = stock_exists[0].get('id')
+
+        db.execute("UPDATE stocks SET shares = :updated_shares WHERE  id = :stock_id",
+                    updated_shares=updated_shares,
+                    stock_id=stock_id) 
+
+    # Otherwise create new row in db with stock info for user
+    else:
+        new_stock = db.execute("INSERT INTO stocks (user_id, symbol, name, shares) VALUES (:user_id, :symbol, :name, :shares)",
+                    user_id=user_id,
+                    symbol=symbol,
+                    name=name,
+                    shares=shares)
+        print(new_stock)    
+        stock_id = new_stock[0].get('id')
+
+    # Update sale/purchase history
+    db.execute("INSERT INTO history (user_id, symbol, shares, price) VALUES (:user_id, :symbol, :shares, :price)",
+                user_id=user_id,
+                symbol=symbol,
+                shares=shares,
+                price=price)
+
+    if stock_exists[0].get('shares') == 0:
+        db.execute("DELETE FROM stock WHERE id = :stock_id AND user_id = :user_id",
+                    stock_id=stock_id,
+                    user_id=user_id)
+                    
+    return redirect("/")
+
