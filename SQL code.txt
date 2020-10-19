@@ -1,0 +1,44 @@
+-- SQLite
+CREATE TABLE stocks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id int,
+    symbol varchar(10),
+    name varchar(255),
+    shares int,
+    UNIQUE(user_id, symbol)
+);
+
+CREATE TABLE history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id int,
+    symbol varchar(10),
+    shares int,
+    price numeric,
+    transacted datetime DEFAULT CURRENT_TIMESTAMP
+);
+
+INSERT INTO history (user_id, symbol, shares, price)
+VALUES (69, 'AAPL', 4, 420.69);
+
+INSERT INTO stocks (user_id, symbol, name, shares)
+VALUES (69, 'AAPL', 'Apple', 4);
+
+portfolio page
+
+    Symbol:
+        SELECT symbol FROM stocks WHERE user_id = :user_id
+        session.get(user_id)
+
+    Name:
+        SELECT name FROM stocks WHERE user_id = :user_id
+        session.get(user_id)
+        
+    Shares:
+        SELECT shares FROM stocks WHERE user_id = :user_id
+        session.get(user_id)
+
+    Price:
+        ***API***
+        
+    Total:
+        price*shares

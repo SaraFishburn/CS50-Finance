@@ -1,0 +1,29 @@
+create new tables in db for shares info
+
+for share in shares table has current user id attached add to table
+
+for user_id in stocks
+
+check berfore adding to db if user already has stock if so update row otherwise create new row
+
+
+when a user buys:
+
+    cash in user table depletes
+
+    if user already has shares in stocks table, update shares column in stocks table
+    else create new row in stocks table
+
+    create new row in history table
+
+
+when a user sells:
+
+    cash in user table increases
+
+    shares column in stocks table decreases
+    if shares decreases to zero, delete row
+
+    create new row in history table
+
+

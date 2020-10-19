@@ -53,8 +53,74 @@ def index():
 @login_required
 def buy():
     """Buy shares of stock"""
-    return apology("TODO")
+    
+    # User reached route via POST (as by submitting a form via POST)
+    if request.method == "POST":
 
+        symbol = request.form.get("symbol")
+        shares = int(request.form.get("shares"))
+
+        # Ensure value was submitted in symbol field
+        if not symbol:
+            return apology("invalid symbol", 403)
+        # Ensure value was submitted in shares field
+        elif not shares:
+            return apology("missing shares", 403)
+
+        stock = lookup(symbol)
+
+        # Ensure symbol exists
+        if not stock:
+            return apology("invalid symbol", 403)
+
+        name = stock.get('name')
+        price = stock.get('price')
+        symbol = stock.get('symbol')
+        user_id = session.get('user_id')
+        user_balance = db.execute("SELECT cash FROM users WHERE id = :user_id",
+                                    user_id=user_id)[0].get('cash')
+        cost = price*shares
+        
+        # Ensure user has sufficient funds
+        if user_balance < cost:
+            return apology("insufficient funds", 403)
+
+        # Update db to reflect purchase
+        else:
+            updated_balance = user_balance - cost
+            db.execute("UPDATE users SET cash = :updated_balance WHERE id = :user_id",
+                            updated_balance=updated_balance,
+                            user_id=user_id)
+            
+            stock_exists = db.execute("SELECT * FROM stocks WHERE user_id = :user_id AND symbol = :symbol",
+                            user_id=user_id,
+                            symbol=symbol)
+
+            if len(stock_exists) != 0:
+                updated_shares = stock_exists[0].get('shares') + shares
+                stock_id = stock_exists[0].get('id')
+
+                db.execute("UPDATE stocks SET shares = :updated_shares WHERE  id = :stock_id",
+                            updated_shares=updated_shares,
+                            stock_id=stock_id) 
+            else:
+                db.execute("INSERT INTO stocks (user_id, symbol, name, shares) VALUES (:user_id, :symbol, :name, :shares)",
+                            user_id=user_id,
+                            symbol=symbol,
+                            name=name,
+                            shares=shares)
+            
+            db.execute("INSERT INTO history (user_id, symbol, shares, price) VALUES (:user_id, :symbol, :shares, :price)",
+                        user_id=user_id,
+                        symbol=symbol,
+                        shares=shares,
+                        price=price)
+
+            return redirect("/")
+
+    # User reached route via GET (as by clicking a link or via redirect)
+    else:
+        return render_template("buy.html")
 
 @app.route("/history")
 @login_required
