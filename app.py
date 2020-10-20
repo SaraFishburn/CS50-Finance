@@ -46,8 +46,36 @@ if not config("API_KEY"):
 def index():
     """Show portfolio of stocks"""
     # User reached route via GET (as by navigating to page via link/URL)
-    return render_template("index.html")
+    
+    # Retrieve stocks user owns
+    user_id = session.get('user_id')
+    index_shares = db.execute("SELECT * FROM stocks WHERE user_id = :user_id",
+                                user_id=user_id)
 
+    sum_prices = 0
+
+    # Add price and total as keys in resulting dictionary
+    for row in index_shares:
+        stock = lookup(row.get('symbol'))
+        price = stock.get('price')
+        total = price * row.get('shares')
+
+        row['price'] = usd(price)
+        row['total'] = usd(total)
+        sum_prices += total
+
+    # Retrieve user's current cash
+    user_cash = db.execute("SELECT cash FROM users WHERE id = :user_id",
+                                user_id=user_id)[0].get('cash')
+    cash = usd(user_cash)
+
+    # Total of all stocks and current cash
+    grand_total = usd(sum_prices + user_cash)     
+        
+    return render_template("index.html", 
+                            cash=cash, 
+                            grand_total=grand_total,
+                            index_shares=index_shares)
 
 @app.route("/buy", methods=["GET", "POST"])
 @login_required
@@ -63,6 +91,7 @@ def buy():
         # Ensure value was submitted in symbol field
         if not symbol:
             return apology("invalid symbol", 403)
+
         # Ensure value was submitted in shares field
         elif not shares:
             return apology("missing shares", 403)
@@ -77,7 +106,7 @@ def buy():
         user_balance = db.execute("SELECT cash FROM users WHERE id = :user_id",
                                     user_id=user_id)[0].get('cash')
         price = stock.get('price')
-        cost = price*shares
+        cost = price * shares
         
         # Ensure user has sufficient funds
         if user_balance < cost:
@@ -94,7 +123,18 @@ def buy():
 @login_required
 def history():
     """Show history of transactions"""
-    return apology("TODO")
+    
+    # Retrieve rows from history relating to current user
+    user_id = session.get('user_id')
+    history = db.execute("SELECT * FROM history WHERE user_id = :user_id",
+                            user_id=user_id)
+
+    # Convert price to usd formatting
+    for row in history:
+        price = row['price']
+        row['price'] = usd(price)
+    
+    return render_template("history.html", history=history)
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -149,8 +189,32 @@ def logout():
 @login_required
 def quote():
     """Get stock quote."""
-    return apology("TODO")
 
+    if request.method == "POST":
+
+        symbol = request.form.get("symbol")
+
+        # Ensure value was submitted in symbol field
+        if not symbol:
+            return apology("invalid symbol", 403)
+
+        stock = lookup(symbol)
+
+        # Ensure symbol exists
+        if not stock:
+            return apology("invalid symbol", 403)
+
+        name = stock.get("name")
+        symbol = stock.get("symbol")
+        price = usd(stock.get("price"))
+
+        # Format message with stock informtation
+        message = 'A share of {name} ({symbol}) costs {price}.'.format(name = name, symbol = symbol, price = price)
+
+        return render_template("quote-message.html", message=message)
+     
+    else:
+        return render_template("quote-form.html")
 
 @app.route("/register", methods=["GET", "POST"])
 def register():
@@ -198,7 +262,40 @@ def register():
 @login_required
 def sell():
     """Sell shares of stock"""
-    return apology("TODO")
+
+    user_id = session.get('user_id')
+
+    # User reached route via POST (as by submitting a form via POST)
+    if request.method == "POST":
+
+        # Retrieve user's current cash balance
+        user_balance = db.execute("SELECT cash FROM users WHERE id = :user_id",
+                                        user_id=user_id)[0].get('cash')
+
+        symbol = request.form.get('symbol')
+        stock = lookup(symbol)
+        shares = int(request.form.get("shares")) * -1
+
+        # Ensure value was submitted in symbol field
+        if not symbol:
+            return apology("missing symbol", 403)
+            
+        # Ensure value was submitted in shares field
+        elif not shares:
+            return apology("missing shares", 403)
+
+        return buy_sell(stock, shares, user_id, user_balance)
+
+    # User reached route via GET (as by navigating to page via link/URL)
+    else:
+        # Retrieve list of stocks user owns
+        user_symbols = db.execute("SELECT symbol FROM stocks WHERE user_id = :user_id",
+                                    user_id=user_id)
+        available_symbols = []
+        for row in user_symbols:
+            available_symbols.append(row.get('symbol'))
+
+        return render_template("sell.html", available_symbols=available_symbols)
 
 
 def errorhandler(e):
@@ -240,15 +337,18 @@ def buy_sell(stock, shares, user_id, user_balance):
                     updated_shares=updated_shares,
                     stock_id=stock_id) 
 
+        if updated_shares == 0:
+            db.execute("DELETE FROM stock WHERE id = :stock_id AND user_id = :user_id",
+                        stock_id=stock_id,
+                        user_id=user_id)
+
     # Otherwise create new row in db with stock info for user
     else:
-        new_stock = db.execute("INSERT INTO stocks (user_id, symbol, name, shares) VALUES (:user_id, :symbol, :name, :shares)",
+        stock_id = db.execute("INSERT INTO stocks (user_id, symbol, name, shares) VALUES (:user_id, :symbol, :name, :shares)",
                     user_id=user_id,
                     symbol=symbol,
                     name=name,
                     shares=shares)
-        print(new_stock)    
-        stock_id = new_stock[0].get('id')
 
     # Update sale/purchase history
     db.execute("INSERT INTO history (user_id, symbol, shares, price) VALUES (:user_id, :symbol, :shares, :price)",
@@ -257,10 +357,6 @@ def buy_sell(stock, shares, user_id, user_balance):
                 shares=shares,
                 price=price)
 
-    if stock_exists[0].get('shares') == 0:
-        db.execute("DELETE FROM stock WHERE id = :stock_id AND user_id = :user_id",
-                    stock_id=stock_id,
-                    user_id=user_id)
                     
     return redirect("/")
 
