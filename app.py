@@ -113,6 +113,7 @@ def buy():
             return apology("insufficient funds", 403)
         
         else:
+            flash("Bought!")
             return buy_sell(stock, shares, user_id, user_balance)
 
     # User reached route via GET (as by clicking a link or via redirect)
@@ -165,6 +166,9 @@ def login():
 
         # Remember which user has logged in
         session["user_id"] = rows[0]["id"]
+        
+
+        flash("Successfully logged in!")
 
         # Redirect user to home page
         return redirect("/")
@@ -183,6 +187,90 @@ def logout():
 
     # Redirect user to login form
     return redirect("/")
+
+@app.route("/account")
+def account():
+    """User account information"""
+    user_id = session.get('user_id')
+    username = db.execute("SELECT username FROM users WHERE id = :user_id",
+                            user_id=user_id)[0].get('username')
+    return render_template("account.html", username=username)
+
+@app.route("/change-password", methods=["GET", "POST"])
+def update_password():
+    """Update uder password"""
+
+    # User reached route via POST (as by submitting a form via POST)
+    if request.method == "POST":
+
+        # Ensure current password was submitted
+        if not request.form.get("current-password"):
+            return apology("must provide current password", 403)
+
+        # Ensure new password was submitted
+        elif not request.form.get("new-password"):
+            return apology("must provide new password", 403)
+
+        # Ensure new password was confirmed
+        elif not request.form.get("confirm-new-password"):
+            return apology("must confirm new password", 403)
+
+        # Ensure new password and confirm new password fields match
+        elif request.form.get("new-password") != request.form.get("confirm-new-password"):
+            return apology("new password confirmation must match new password", 403)
+
+        user_id = session.get('user_id')
+        user_hash = db.execute("SELECT hash FROM users WHERE id = :user_id",
+                                user_id=user_id)[0].get('hash')
+
+        # Ensure current password is correct  
+        if not check_password_hash(user_hash, request.form.get("current-password")):
+            return apology("current password incorrect", 403)
+        
+        updated_password = generate_password_hash(request.form.get('new-password'))
+
+        # Update password hash in database
+        db.execute("UPDATE users SET hash = :updated_password WHERE id = :user_id",
+                    updated_password=updated_password,
+                    user_id=user_id)
+        
+        flash("Password successfully updated!")
+        return redirect("/")
+
+    # User reached route via GET (as by navigating to page via link/URL)
+    else:
+        return render_template("change-password.html")
+
+@app.route("/deposit-or-withdraw", methods=["GET", "POST"])
+def deposit_withdraw():
+    """Add or subtract user cash"""
+
+    # User reached route via POST (as by submitting a form via POST)
+    if request.method == "POST":
+        
+        action = request.form.get('action')
+        amount = int(request.form.get('amount'))
+
+        # Ensure action has been selected
+        if not action:
+            return apology("missing action", 403)
+
+        # Ensure amount has been entered
+        elif not amount:
+            return apology("missing amount", 403)
+        
+        # Add amount to cash if user is depositing
+        elif action == 'deposit':
+            return update_cash(amount)
+
+        # Subtract amount from cash if user is withdrawing
+        elif action == 'withdraw':
+            amount *= -1
+            return update_cash(amount)
+
+    # User reached route via GET (as by navigating to page via link/URL)
+    else:
+        return render_template("deposit-or-withdraw.html")
 
 
 @app.route("/quote", methods=["GET", "POST"])
@@ -283,6 +371,16 @@ def sell():
         # Ensure value was submitted in shares field
         elif not shares:
             return apology("missing shares", 403)
+        
+        shares *= -1
+        # Ensure user is unable to sell more shares than they own
+        if shares > db.execute("SELECT shares FROM stocks WHERE symbol = :symbol AND user_id = :user_id",
+                                    symbol=symbol,
+                                    user_id=user_id)[0].get('shares'):
+            return apology("too many shares", 400)
+
+        
+        flash("Sold!")
 
         return buy_sell(stock, shares, user_id, user_balance)
 
@@ -308,6 +406,24 @@ def errorhandler(e):
 # Listen for errors
 for code in default_exceptions:
     app.errorhandler(code)(errorhandler)
+
+# Update cash amount
+def update_cash(amount):
+    user_id = session.get('user_id')
+    current_balance = db.execute("SELECT cash FROM users WHERE id = :user_id", 
+                                user_id=user_id)[0].get('cash')
+
+    if amount * -1 > current_balance:
+        return apology("you are too poor :(", 402)
+
+    updated_cash = current_balance + amount
+
+    db.execute("UPDATE users SET cash = :updated_cash WHERE id = :user_id",
+                updated_cash=updated_cash,
+                user_id=user_id)
+    return redirect("/")
+
+
 
 
 # Function to update db to reflect sale/purchase of stock

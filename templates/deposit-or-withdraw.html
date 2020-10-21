@@ -1,0 +1,22 @@
+{% extends "layout.html" %}
+
+{% block title %}
+    Deposit or Withdraw
+{% endblock %}
+
+{% block main %}
+    <form action="/deposit-or-withdraw" method="post">
+        <div class="form-group">
+            <select class="form-control" name="action">
+                <option disabled="" selected="" value="">Action</option>
+                    <option value="deposit">Deposit</option>
+                    <option value="withdraw">Withdraw</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label style="position: relative; left:17px;">$</label>
+            <input class="form-control" name="amount" min="1" placeholder="Amount" type="number">
+        </div>
+        <button class="btn btn-primary" type="submit">Update Balance</button>
+    </form>
+{% endblock %}
